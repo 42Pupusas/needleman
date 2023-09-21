@@ -5,5 +5,13 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "needleman"
+path = "src/lib.rs"
+
+[[bin]]
+name = "needleman"
+path = "src/needle.rs"
+
 [dependencies]
 seq_io = "0.3.2"

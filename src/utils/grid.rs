@@ -1,70 +1,9 @@
-use std::{
-    fmt::Display,
-    fs::File,
-    io::{self, BufReader},
-    str::from_utf8,
-    sync::Arc,
-};
-
-// Representacion de las direcciones en la matriz
-#[derive(Clone, Debug, Copy, PartialEq, Eq)]
-enum Arrow {
-    Diagonal,
-    Horizontal,
-    Vertical,
-}
-
-impl Display for Arrow {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Arrow::Diagonal => write!(f, "D"),
-            Arrow::Horizontal => write!(f, "H"),
-            Arrow::Vertical => write!(f, "V"),
-        }
-    }
-}
-
-// Representacion de la celda en la matriz
-// Contiene el puntaje y las direcciones
-#[derive(Clone, Debug)]
-struct Cell {
-    score: i32,
-    arrow: Vec<Arrow>,
-}
-
-impl Cell {
-    // Constructor de la celda vacia
-    pub fn new() -> Cell {
-        Cell {
-            score: 0,
-            arrow: Vec::new(),
-        }
-    }
-}
-
-// Representacion de la alineacion de secuencias
-#[derive(Debug, Clone)]
-struct SequenceAlignment {
-    top_sequence: Arc<str>,
-    side_sequence: Arc<str>,
-}
-
-impl SequenceAlignment {
-    // Constructor de la alineacion de secuencias
-    // Arc: Atomic Reference Counter: estructura mas eficiente par amaenjo de memoria
-    pub fn new(top_sequence: &str, side_sequence: &str) -> SequenceAlignment {
-        SequenceAlignment {
-            top_sequence: Arc::from(top_sequence),
-            side_sequence: Arc::from(side_sequence),
-        }
-    }
-}
-
-
+use std::fmt::Display;
+use crate::utils::models::{Arrow, Cell, SequenceAlignment};
 // Representacion de la matriz
 // Contiene la matriz de celdas y la alineacion de secuencias
 #[derive(Debug)]
-struct Grid {
+pub struct Grid {
     grid: Vec<Vec<Cell>>,
     alignment: SequenceAlignment,
 }
@@ -111,6 +50,7 @@ impl Display for Grid {
 }
 
 impl Grid {
+    
     // Constructor de la matriz
     pub fn new(alignment: &SequenceAlignment) -> Grid {
         // Crear matriz con la dimension de secuencias + 2
@@ -141,6 +81,7 @@ impl Grid {
     pub fn compute_scores(&mut self) {
         // Recorremos filas y columnas para modificar cada Celda
         for i in 1..=self.alignment.top_sequence.len() {
+            
             for j in 1..=self.alignment.side_sequence.len() {
                 // Calculamos el puntaje de match o mismatch
                 let match_score = if self.alignment.top_sequence.chars().nth(i - 1)
@@ -245,122 +186,5 @@ impl Grid {
     }
 }
 
-// Lee el archivo FASTA y lo corta a un largo especifico
-// ESTO SI ES DE PAQUETE ME DIO WEBA HACERLO
-// Solo modifique a retornar Arc<str> en vez de Strings
-fn read_and_clip_fasta(filename: &str, clip_length: usize) -> Result<Arc<str>, io::Error> {
-    let reader = BufReader::new(File::open(filename)?);
-    let mut sequences = seq_io::fasta::Reader::new(reader);
 
-    if let Some(result) = sequences.records().next() {
-        let record = result.unwrap();
-        let sequence = record.seq;
-        if sequence.len() > clip_length {
-            return Ok(Arc::from(from_utf8(&sequence[0..clip_length]).unwrap()));
-        } else {
-            return Ok(Arc::from(from_utf8(&sequence).unwrap()));
-        }
-    }
-    Err(io::Error::new(
-        io::ErrorKind::InvalidData,
-        "FASTA file is empty or has no valid records",
-    ))
-}
 
-// Construye la alineacion de secuencias a partir de la direccion de la matriz
-fn build_alignment_from_path(
-    top_sequence: &str,
-    side_sequence: &str,
-    path: &Vec<Arrow>,
-    ) -> SequenceAlignment {
-    // Creamos dos vectores vacios para almacenar las secuencias
-    let mut top_sequence_chars = Vec::new();
-    let mut side_sequence_chars = Vec::new();
-
-    // Inicializamos los indices de las secuencias
-    let mut top_index = top_sequence.len() - 1;
-    let mut side_index = side_sequence.len() - 1;
-
-    // Recorremos el path de la matriz en forma reversa
-    // El match asigna la funcion correspondiente a cada direccion
-    for &arrow in path.iter().rev() {
-        match arrow {
-            Arrow::Diagonal => {
-                // Agregamos los caracteres de ambas seceuncias porque hay alineacion
-                top_sequence_chars.push(top_sequence.chars().nth(top_index).unwrap());
-                side_sequence_chars.push(side_sequence.chars().nth(side_index).unwrap());
-
-                // Decrementamos los indices
-                if top_index > 0 {
-                    top_index -= 1;
-                }
-                if side_index > 0 {
-                    side_index -= 1;
-                }
-            }
-            Arrow::Horizontal => {
-                // Agregamos el caracter de la secuencia top y un guion al de la secuencia side
-                top_sequence_chars.push(top_sequence.chars().nth(top_index).unwrap());
-                side_sequence_chars.push('-');
-
-                // Decrementamos el indice de la secuencia top
-                if top_index > 0 {
-                    top_index -= 1;
-                }
-            }
-            Arrow::Vertical => {
-                // Agregamos el caracter de la secuencia side y un guion al de la secuencia top
-                top_sequence_chars.push('-');
-                side_sequence_chars.push(side_sequence.chars().nth(side_index).unwrap());
-                // Decrementamos el indice de la secuencia side
-                if side_index > 0 {
-                    side_index -= 1;
-                }
-            }
-        }
-    }
-
-    // Construimos las secuencias a partir de los vectores de caracteres en reversa
-    let top_sequence = Arc::from(top_sequence_chars.iter().rev().collect::<String>());
-    let side_sequence = Arc::from(side_sequence_chars.iter().rev().collect::<String>());
-
-    SequenceAlignment {
-        top_sequence,
-        side_sequence,
-    }
-}
-
-// Funcion principal
-fn main() {
-    // let string1 = "GCATGCG";
-    // let string2 = "GATTACA";
-    let path = std::env::current_dir()
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .to_string();
-    let fasta1 = read_and_clip_fasta(&format!("{}/src/org1.fasta", path), 30).unwrap();
-    let fasta2 = read_and_clip_fasta(&format!("{}/src/org2.fasta", path), 30).unwrap();
-    // println!("Fasta 1: {}", fasta1);
-    // println!("Fasta 2: {}", fasta2);
-    let alignment = SequenceAlignment::new(&fasta1, &fasta2);
-    // let alignment = SequenceAlignment::new(string1, string2);
-    let mut grid = Grid::new(&alignment);
-    grid.compute_scores();
-
-    grid.compute_arrows();
-
-    let paths = grid.find_paths();
-    for path in paths {
-        let top_sequence = alignment.top_sequence.clone();
-        let side_sequence = alignment.side_sequence.clone();
-        std::thread::spawn(move || {
-            let potential_alignment =
-                build_alignment_from_path(&*top_sequence, &*side_sequence, &path);
-            println!("Alignment Candidate:");
-            println!("Top Sequence: {:?}", potential_alignment.top_sequence);
-            println!("Side Sequence: {:?}", potential_alignment.side_sequence);
-        });
-    }
-    println!("Grid Struct: {}", grid);
-}
